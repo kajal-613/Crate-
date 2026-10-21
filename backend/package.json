@@ -1,0 +1,22 @@
+{
+  "name": "crate-server",
+  "version": "1.0.0",
+  "description": "Express + MySQL API for Crate e-commerce platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "generate:dataset": "node scripts/generate-relational-dataset.js",
+    "seed:custom": "node scripts/seed-custom-db.js",
+    "test:adbms": "node scripts/test-adbms-queries.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.11.0"
+  }
+}
