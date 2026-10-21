@@ -1,0 +1,97 @@
+import { request } from "./client";
+
+// Fetch all orders for a customer (used on account + orders pages)
+export async function fetchOrdersByCustomer(customerId) {
+  try {
+    const orders = await request(`/api/customers/${customerId}/orders`);
+    return Array.isArray(orders) ? orders.map(o => ({
+      ...o,
+      items: o.items || [],
+      total: o.total || o.payment_value || 0,
+      placed_at: o.placed_at || o.order_purchase_timestamp,
+      status: o.status || o.order_status || "Processing",
+    })) : [];
+  } catch {
+    return [];
+  }
+}
+
+const STAGES = ["Order Placed", "Processing", "Shipped", "Out for Delivery", "Delivered"];
+
+function normalizeOrder(raw) {
+  const doneUpTo = {
+    delivered: 4,
+    shipped: 2,
+    invoiced: 1,
+    processing: 1,
+    approved: 1,
+    created: 0,
+    unavailable: 0,
+    canceled: 0,
+  }[raw.order_status] ?? 0;
+
+  const timeline = STAGES.map((status, idx) => ({
+    status,
+    done: idx <= doneUpTo,
+    at:
+      idx === 0
+        ? raw.order_purchase_timestamp
+        : idx === 1
+        ? raw.order_approved_at
+        : idx === 2
+        ? raw.order_delivered_carrier_date
+        : idx === 4
+        ? raw.order_delivered_customer_date
+        : null,
+  }));
+
+  const subtotal = raw.items.reduce((s, i) => s + Number(i.price), 0);
+  const deliveryFee = raw.items.reduce((s, i) => s + Number(i.freight_value), 0);
+
+  return {
+    order_id: raw.order_id,
+    placed_at: raw.order_purchase_timestamp,
+    status: raw.order_status === "delivered" ? "Delivered" : STAGES[doneUpTo],
+    timeline,
+    items: raw.items.map((i) => ({
+      product_id: i.product_id,
+      name: i.product_name,
+      image: i.image,
+      qty: 1,
+      price: Number(i.price),
+    })),
+    payment_method: raw.payments?.[0]?.payment_type || "—",
+    subtotal,
+    discount: 0,
+    delivery_fee: Math.round(deliveryFee),
+    tax: 0,
+    total: Math.round(subtotal + deliveryFee),
+    address: raw.customer
+      ? {
+          line1: raw.customer.customer_address || "Address on file",
+          line2: "",
+          city: raw.customer.customer_city,
+          state: raw.customer.customer_state,
+          postal_code: raw.customer.customer_zip_prefix || "",
+          country: "India",
+        }
+      : { line1: "Address on file", line2: "", city: "-", state: "-", postal_code: "", country: "-" },
+  };
+}
+
+// GET /api/orders/:id
+export async function fetchOrderById(orderId) {
+  try {
+    const raw = await request(`/api/orders/${orderId}`);
+    return normalizeOrder(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function placeOrder(orderDraft) {
+  return request("/api/orders", {
+    method: "POST",
+    body: JSON.stringify(orderDraft),
+  });
+}
